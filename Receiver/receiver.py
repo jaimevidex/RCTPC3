@@ -18,30 +18,33 @@ import select
 
 #constants
 ACK_MSG = 1
+DIAGRAM_SIZE = 1500
 BLOCK_SIZE = 1024
 
 
-def receiveData(receiverSocket, fileNameInReceiver):
+def receiveData(receiverSocket : socket, fileNameInReceiver):
     expectedseqnum = 1
+    file = open(fileNameInReceiver, 'wb')
     
-    data = receiverSocket.recv(BLOCK_SIZE)
-    rcvpkt = pickle.loads(data) # recebe isto pickle.dumps((DATA_MSG, chunkNum, fileBytes))
-    
-    seqNumber = 0
-
-    if rcvpkt[0] == 0 and rcvpkt[1] == expectedseqnum :
-        with open(fileNameInReceiver, 'wb') as f :
-            f.write(rcvpkt[2])
-        seqNumber = expectedseqnum
-        expectedseqnum += 1
+    while True:
+        data = receiverSocket.recvfrom(DIAGRAM_SIZE)[0]
+        rcvpkt = pickle.loads(data)
         
-    elif rcvpkt[0] == 1:
-        f.close
-        receiverSocket.close()
-        return
+        msg = rcvpkt[0]
+        seqNum = rcvpkt[1]
+        bytes = rcvpkt[2]
 
-    answer = pickle.dumps((ACK_MSG, seqNumber))    
-    receiverSocket.send(answer)
+        if msg == 0 and  seqNum == expectedseqnum :
+            file.write(bytes)
+            expectedseqnum += 1
+            
+        elif msg == 1:
+            file.close()
+            receiverSocket.close()
+            return
+        
+        answer = pickle.dumps((ACK_MSG, expectedseqnum))
+        receiverSocket.sendto(answer, ('localhost', 3232))
    
 def main():
     receiverIP = sys.argv[1]

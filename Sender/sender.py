@@ -29,6 +29,7 @@ blocos fixos de 1024 bytes
 consola: python sender.py senderHostName senderPort receiverHostName receiverPort filename_receiver windowSizeInBlocks(nº de  blocos)
 """
 
+from io import BufferedReader
 from socket import *
 import sys
 import pickle
@@ -36,32 +37,36 @@ import time
 import random
 import select
 import os
+import types
 
 #constants
-DATAGRAM_MAX_SIZE = 1100
+
+states = types.SimpleNamespace()
+states.SENDING_MSG = 0
+states.WAIT_ACKS_MSG = 1
+states.FILE_SENT = 2
+
 BLOCK_SIZE = 1024
 RATE_LOSS = 2
-
-SENDING_MSG = 0
-WAIT_ACKS_MSG = 1
-FILE_SENT = 2
+TIMEOUT = 1
 
 DATA_MSG = 0
-SENT_MSG = 1
+END_MSG = 1
 TIMEOUT_MSG = 0
 PCKT_RECEIVED_MSG = 1
 
 """ 
 funções auxiliares    
 """
-def sendData ( sock, data, dest):
+
+def sendData ( sock: socket, data, dest):
     rand = random.randint(1, 10)
     if (rand > RATE_LOSS):
         sock.sendto(data, dest)
     else:
         print("Packet loss, sequence number = ", data[1])
 
-def sendChunk (sock, file, dest, chunkNum):
+def sendChunk (sock: socket, file: BufferedReader, dest, chunkNum):
     fileBytes = file.read(BLOCK_SIZE)
     if (len(fileBytes) == 0) :
         print("End of file")
@@ -73,57 +78,91 @@ def sendChunk (sock, file, dest, chunkNum):
     return (len(fileBytes), data)
 
 def waitForAnswer (sock) :
-    rx, tx, er = select.select([sock], [], [], 1)
+    rx, tx, er = select.select([sock], [], [], TIMEOUT)
     if rx == []:
-        print("Timeout")
         return TIMEOUT_MSG
     else:
         return PCKT_RECEIVED_MSG
 
-def sendFile (sock, file, dest, sizeOfSW, fileSize) :
+def sendFile (sock: socket, file: BufferedReader, dest, sizeOfSW, fileSize) :
     #initializing variables
     swBase = 1
     nextSeqNum = 1
-    maxSeqNum = 1 + fileSize // BLOCK_SIZE
+    maxSeqNum = fileSize // BLOCK_SIZE
     bytesSent = 0
     #initializing Sliding Window 
     sw = {}
+
     while (nextSeqNum < swBase + sizeOfSW and nextSeqNum <= maxSeqNum):
         bySent, data = sendChunk(sock, file, dest, nextSeqNum)
         sw[nextSeqNum] = data
         nextSeqNum += 1
         bytesSent += bySent
+
+    #sw, bytesSent, nextSeqNum = setWindow( nextSeqNum, swBase, sizeOfSW, maxSeqNum, sock, file, dest, bytesSent, sw)
     
-    if nextSeqNum > maxSeqNum:
-        state = WAIT_ACKS_MSG
+    if nextSeqNum -1 > maxSeqNum:
+        state = states.WAIT_ACKS_MSG
     else:
-        state = SENDING_MSG
+        state = states.SENDING_MSG
 
     answer = waitForAnswer(sock)
 
-    while (state != FILE_SENT):
-        if (state == SENDING_MSG):
-            if (answer == TIMEOUT_MSG):
-                for i in range(swBase, nextSeqNum):
-                    sendData(sock, sw[i], dest)
-            else:
-                data = sock.recv(DATAGRAM_MAX_SIZE)
-                seqNum = pickle.loads(data)[1]
-                if (seqNum >= swBase):
-                    for i in range(swBase, seqNum+1):
-                        del sw[i]
-                    swBase = seqNum + 1
-        elif (state == WAIT_ACKS_MSG):
-            if (answer == TIMEOUT_MSG):
-                for i in range(swBase, nextSeqNum):
-                    sendData(sock, sw[i], dest)
-            else:
-                if (swBase > maxSeqNum):
-                    sock.sendto(pickle.dumps((SENT_MSG, 0, 0)), dest)
-                    state = FILE_SENT
+    while True:
+        match (state):
+            case states.SENDING_MSG:
+                if (answer == TIMEOUT_MSG):
+                    for i in range(swBase, swBase + sizeOfSW - 1):
+                        sendData(sock, sw[i], dest)
 
-    sock.close()
-    file.close()      
+                elif (answer == PCKT_RECEIVED_MSG):
+                    data, adress = sock.recvfrom(BLOCK_SIZE)
+                    content = pickle.loads(data)
+                    seqNum = content[1]
+                    print("seqNum", seqNum)
+                    if (seqNum >= swBase):
+                        for i in range(swBase, seqNum):
+                            del sw[i]
+                        swBase = seqNum + 1
+                        bySent, data = sendChunk(sock, file, dest, nextSeqNum)
+                        sw[nextSeqNum] = data
+                        nextSeqNum += 1
+                        print("nextseq", nextSeqNum)
+                        if nextSeqNum -1 > maxSeqNum:
+                            state = states.WAIT_ACKS_MSG   
+                        bytesSent += bySent
+        
+                answer = waitForAnswer(sock)
+                print("answerrrrrr", answer)
+                continue       
+            
+            case states.WAIT_ACKS_MSG:
+                print("Waiting for acks")
+                if (answer == TIMEOUT_MSG):
+                    for i in range(swBase, swBase + sizeOfSW - 1):
+                        sendData(sock, sw[i], dest)
+                else:
+                    print("entrou")
+                    if (swBase > maxSeqNum):
+                        state = states.FILE_SENT
+                        
+                    else:
+                        for i in range(swBase, maxSeqNum + 1):
+                            print(sw[i])
+                            print(len(sw[i]))
+                            sendData(sock, sw[i], dest)
+                            
+                        state = states.FILE_SENT
+                        
+                answer = waitForAnswer(sock)
+                continue
+            
+            case states.FILE_SENT:
+                sock.sendto(pickle.dumps((END_MSG, 0, 0)), dest)
+                print("File sent")
+                sock.close()
+                file.close() 
+                return              
         
 def main():
     senderHostName = sys.argv[1]
@@ -140,9 +179,12 @@ def main():
     windowSizeInBlocks = int(sys.argv[6])
 
     sock = socket(AF_INET, SOCK_DGRAM)
-    sock.connect(receiver)
+    sock.bind(sender)
+
+    #print("cona")
 
     sendFile( sock, file, receiver, windowSizeInBlocks, os.path.getsize(filename_receiver) )
+    
     sock.close()
 
 if __name__ == "__main__":
