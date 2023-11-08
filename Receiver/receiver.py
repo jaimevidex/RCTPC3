@@ -6,7 +6,7 @@ cSeqN -> cumulative sequence number, acknowledging all packets up to and includi
 
 receiver:
 vai receber blocos e produzir acks (para o sender)
-consola: python receiver.py receiverIP receiverPort fileNameInReceiver(nome que vai ter no receiver)
+consola: python receiver.py receiverIP receiverPort fileNameInReceiver(nome que vai ter no receiver) twatw
 """
 
 from socket import *
