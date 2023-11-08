@@ -58,7 +58,6 @@ PCKT_RECEIVED_MSG = 1
 def sendData ( sock: socket, data, dest):
     rand = random.randint(1, 10)
     if (rand > RATE_LOSS):
-        print(pickle.loads(data))
         sock.sendto(data, dest)
     else:
         print("Packet loss, sequence number = ", pickle.loads(data)[1])
@@ -109,7 +108,6 @@ def sendFile (sock: socket, file: BufferedReader, dest, sizeOfSW, fileSize) :
         match (state):
             case states.SENDING_MSG:
                 if (answer == TIMEOUT_MSG):
-                    print("Timeout")
                     for i in range(swBase, nextSeqNum):
                         sendData(sock, sw[i], dest)
 

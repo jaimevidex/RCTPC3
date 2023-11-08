@@ -30,7 +30,6 @@ def receiveData(receiverSocket : socket, fileNameInReceiver, receiver):
         
         data,addr = receiverSocket.recvfrom(DIAGRAM_SIZE)
         rcvpkt = pickle.loads(data)
-        print(rcvpkt)
         
         msg = rcvpkt[0]
         seqNum = rcvpkt[1]
