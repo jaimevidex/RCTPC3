@@ -22,13 +22,15 @@ DIAGRAM_SIZE = 1500
 BLOCK_SIZE = 1024
 
 
-def receiveData(receiverSocket : socket, fileNameInReceiver):
+def receiveData(receiverSocket : socket, fileNameInReceiver, receiver):
     expectedseqnum = 1
     file = open(fileNameInReceiver, 'wb')
     
     while True:
-        data = receiverSocket.recvfrom(DIAGRAM_SIZE)[0]
+        
+        data,addr = receiverSocket.recvfrom(DIAGRAM_SIZE)
         rcvpkt = pickle.loads(data)
+        print(rcvpkt)
         
         msg = rcvpkt[0]
         seqNum = rcvpkt[1]
@@ -44,7 +46,7 @@ def receiveData(receiverSocket : socket, fileNameInReceiver):
             return
         
         answer = pickle.dumps((ACK_MSG, expectedseqnum))
-        receiverSocket.sendto(answer, ('localhost', 3232))
+        receiverSocket.sendto(answer, addr)
    
 def main():
     receiverIP = sys.argv[1]
@@ -56,7 +58,7 @@ def main():
     receiverSocket = socket(AF_INET, SOCK_DGRAM)
     receiverSocket.bind(receiver)
 
-    receiveData(receiverSocket, fileNameInReceiver)
+    receiveData(receiverSocket, fileNameInReceiver, receiver)
 
 if __name__ == "__main__":
     main()
