@@ -1,8 +1,7 @@
-# RCTPC3 — Reliable File Transfer over UDP
+# Reliable File Transfer over UDP
 
 A **Go-Back-N** sliding-window protocol built on top of UDP, written from scratch in Python. It transfers a file between two hosts over an unreliable datagram channel, handling loss, reordering and timeouts.
 
-Written for the *Redes de Computadores* course at Instituto Superior Técnico.
 
 ## Why this is interesting
 
@@ -52,5 +51,5 @@ Receiver arguments: `receiverIP receiverPort outputFileName`.
 ## Notes
 
 - Standard library only (`socket`, `pickle`, `select`, `os`, `time`).
-- The protocol assumes **no packet corruption** — only loss and reordering — as specified by the assignment.
+- The protocol assumes **no packet corruption** — only loss and reordering — as the protocol requires.
 - Educational code; there is no encryption or authentication.
